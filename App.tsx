@@ -1,9 +1,10 @@
 
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { UserAssessment, Level, Persona, RoadmapItem } from './types';
 import { CATEGORIES, PERSONAS } from './constants';
 import { generatePersonalizedRoadmap } from './services/gemini';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from 'recharts';
+import { jsPDF } from 'jspdf';
 
 const App: React.FC = () => {
   const [assessment, setAssessment] = useState<UserAssessment>(() => {
@@ -82,16 +83,99 @@ const App: React.FC = () => {
     }
   };
 
-  const isCategoryComplete = (catIdx: number) => {
-    const cat = CATEGORIES[catIdx];
-    return cat.questions.every(q => assessment.answers[q.id] !== undefined);
-  };
-
   const totalProgress = useMemo(() => {
     const answered = Object.keys(assessment.answers).length;
     const total = CATEGORIES.reduce((acc, c) => acc + c.questions.length, 0);
     return Math.round((answered / total) * 100);
   }, [assessment.answers]);
+
+  const handleResetAnswers = () => {
+    if (confirm('Réinitialiser toutes vos réponses et notes ? Votre nom sera conservé.')) {
+      setAssessment(prev => ({
+        ...prev,
+        answers: {},
+        notes: {}
+      }));
+      setCurrentStep(0);
+      setRoadmap([]);
+    }
+  };
+
+  const handleSavePDF = () => {
+    const doc = new jsPDF();
+    const margin = 20;
+    let yPos = 20;
+
+    // Titre
+    doc.setFontSize(22);
+    doc.setTextColor(37, 99, 235); // Blue-600
+    doc.text("Bilan Technopedagogique FAD", margin, yPos);
+    yPos += 15;
+
+    // Infos utilisateur
+    doc.setFontSize(12);
+    doc.setTextColor(100);
+    doc.text(`Enseignant(e) : ${assessment.userName || 'Anonyme'}`, margin, yPos);
+    doc.text(`Date : ${new Date().toLocaleDateString()}`, doc.internal.pageSize.getWidth() - margin - 40, yPos);
+    yPos += 20;
+
+    // Bilan Global
+    doc.setFontSize(16);
+    doc.setTextColor(0);
+    doc.text("Resultat Global", margin, yPos);
+    yPos += 10;
+    doc.setFontSize(24);
+    doc.setTextColor(37, 99, 235);
+    doc.text(`${globalAvg.toFixed(2)} / 3.00`, margin, yPos);
+    yPos += 15;
+
+    // Profil
+    doc.setFontSize(14);
+    doc.setTextColor(0);
+    doc.text(`Profil : ${persona.title}`, margin, yPos);
+    yPos += 10;
+    doc.setFontSize(10);
+    doc.setTextColor(80);
+    const descLines = doc.splitTextToSize(persona.description, doc.internal.pageSize.getWidth() - 2 * margin);
+    doc.text(descLines, margin, yPos);
+    yPos += descLines.length * 5 + 15;
+
+    // Scores par catégorie
+    doc.setFontSize(14);
+    doc.setTextColor(0);
+    doc.text("Details par Categorie", margin, yPos);
+    yPos += 10;
+    doc.setFontSize(11);
+    scores.forEach(score => {
+      doc.setTextColor(0);
+      doc.text(`${score.name}:`, margin, yPos);
+      doc.setTextColor(37, 99, 235);
+      doc.text(`${score.value} / 3.00`, margin + 60, yPos);
+      yPos += 8;
+    });
+
+    // Roadmap si présente
+    if (roadmap.length > 0) {
+      yPos += 15;
+      doc.setFontSize(14);
+      doc.setTextColor(0);
+      doc.text("Plan d'action personnalise", margin, yPos);
+      yPos += 10;
+      doc.setFontSize(10);
+      roadmap.forEach((item, idx) => {
+        doc.setTextColor(37, 99, 235);
+        doc.text(`${idx + 1}. ${item.title}`, margin, yPos);
+        yPos += 5;
+        doc.setTextColor(80);
+        const text = `${item.description}${item.link ? ` (Lien: ${item.link})` : ''}`;
+        const itemDesc = doc.splitTextToSize(text, doc.internal.pageSize.getWidth() - 2 * margin);
+        doc.text(itemDesc, margin + 5, yPos);
+        yPos += itemDesc.length * 5 + 5;
+      });
+    }
+
+    doc.save(`Bilan_FAD_${assessment.userName || 'Enseignant'}.pdf`);
+  };
 
   return (
     <div className="min-h-screen pb-20">
@@ -132,7 +216,7 @@ const App: React.FC = () => {
         <section className="lg:col-span-7 space-y-6">
           <div className="bg-white dark:bg-slate-900 rounded-3xl p-6 shadow-xl shadow-slate-200/50 dark:shadow-none border border-slate-100 dark:border-slate-800">
             {/* Stepper Header */}
-            <div className="flex justify-between mb-8 overflow-x-auto pb-2">
+            <div className="flex justify-between mb-8 overflow-x-auto pb-2 no-print">
               {CATEGORIES.map((cat, idx) => (
                 <button
                   key={cat.id}
@@ -186,7 +270,7 @@ const App: React.FC = () => {
                 ))}
               </div>
 
-              <div className="pt-6">
+              <div className="pt-6 no-print">
                 <label className="block text-sm font-bold text-slate-500 uppercase tracking-wider mb-2">Réflexions personnelles</label>
                 <textarea
                   value={assessment.notes[CATEGORIES[currentStep].id] || ''}
@@ -196,7 +280,7 @@ const App: React.FC = () => {
                 />
               </div>
 
-              <div className="flex justify-between pt-6 border-t dark:border-slate-800">
+              <div className="flex justify-between pt-6 border-t dark:border-slate-800 no-print">
                 <button
                   disabled={currentStep === 0}
                   onClick={() => setCurrentStep(Math.max(0, currentStep - 1))}
@@ -218,7 +302,6 @@ const App: React.FC = () => {
 
         {/* Right Column: Analytics Dashboard */}
         <section className="lg:col-span-5 space-y-6">
-          {/* Result Card */}
           <div className="bg-white dark:bg-slate-900 rounded-3xl p-6 shadow-xl border border-slate-100 dark:border-slate-800 sticky top-24">
             <div className="flex justify-between items-start mb-6">
               <div>
@@ -230,7 +313,7 @@ const App: React.FC = () => {
               </div>
               <div className="flex flex-col items-center">
                 <div className="text-4xl mb-1">{persona.icon}</div>
-                <span className="px-3 py-1 bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 rounded-full text-[10px] font-black uppercase tracking-widest">
+                <span className="px-3 py-1 bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 rounded-full text-[10px] font-black uppercase tracking-widest text-center">
                   {persona.title}
                 </span>
               </div>
@@ -264,7 +347,7 @@ const App: React.FC = () => {
               </ResponsiveContainer>
             </div>
 
-            <div className="mt-8 space-y-4">
+            <div className="mt-8 space-y-4 no-print">
                <div className="flex justify-between text-xs font-bold uppercase tracking-wider text-slate-400">
                 <span>Progression</span>
                 <span>{totalProgress}%</span>
@@ -278,7 +361,7 @@ const App: React.FC = () => {
             </div>
 
             {/* AI Roadmap Trigger */}
-            <div className="mt-8 pt-8 border-t dark:border-slate-800">
+            <div className="mt-8 pt-8 border-t dark:border-slate-800 no-print">
               <h4 className="font-bold flex items-center gap-2 text-slate-800 dark:text-white mb-4">
                 <span>🪄</span> IA Coach Roadmap
               </h4>
@@ -304,16 +387,13 @@ const App: React.FC = () => {
                       <p className="text-xs text-slate-600 dark:text-slate-400">{item.description}</p>
                       {item.link && (
                         <a href={item.link} target="_blank" rel="noopener noreferrer" className="inline-block mt-2 text-[10px] font-black uppercase text-blue-500 hover:underline">
-                          En savoir plus →
+                          Consulter la ressource →
                         </a>
                       )}
                     </div>
                   ))}
-                  <button onClick={() => setRoadmap([])} className="text-xs text-slate-400 hover:text-slate-600 w-full text-center">Recommencer</button>
+                  <button onClick={() => setRoadmap([])} className="text-xs text-slate-400 hover:text-slate-600 w-full text-center">Recommencer la génération</button>
                 </div>
-              )}
-              {totalProgress < 10 && !isLoadingRoadmap && (
-                <p className="text-[10px] text-center text-slate-400 mt-2">Répondez à quelques questions d'abord pour activer l'IA.</p>
               )}
             </div>
           </div>
@@ -321,44 +401,31 @@ const App: React.FC = () => {
       </main>
 
       {/* Persistent Footer Actions */}
-      <footer className="fixed bottom-0 left-0 right-0 p-4 bg-white/80 dark:bg-slate-900/80 backdrop-blur-md border-t dark:border-slate-800 z-40">
+      <footer className="fixed bottom-0 left-0 right-0 p-4 bg-white/80 dark:bg-slate-900/80 backdrop-blur-md border-t dark:border-slate-800 z-40 no-print">
         <div className="max-w-7xl mx-auto flex justify-between items-center">
           <div className="flex gap-2">
             <button 
-              onClick={() => {
-                if (confirm('Réinitialiser tout le questionnaire ?')) {
-                  localStorage.removeItem('fad_pro_assessment');
-                  location.reload();
-                }
-              }}
+              onClick={handleResetAnswers}
               className="p-3 bg-red-50 text-red-500 rounded-xl hover:bg-red-100 transition-colors"
-              title="Réinitialiser"
+              title="Réinitialiser les réponses"
             >
               🔄
             </button>
             <button 
               onClick={() => window.print()}
               className="p-3 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 rounded-xl hover:bg-slate-200 transition-colors"
-              title="Imprimer"
+              title="Imprimer le bilan"
             >
               🖨️
             </button>
           </div>
           
           <button 
-             onClick={() => {
-              const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(assessment));
-              const downloadAnchorNode = document.createElement('a');
-              downloadAnchorNode.setAttribute("href", dataStr);
-              downloadAnchorNode.setAttribute("download", `Bilan_FAD_${assessment.userName || 'SansNom'}.json`);
-              document.body.appendChild(downloadAnchorNode);
-              downloadAnchorNode.click();
-              downloadAnchorNode.remove();
-            }}
-            className="flex items-center gap-2 px-6 py-3 bg-blue-600 text-white rounded-2xl font-bold shadow-lg shadow-blue-500/30 hover:bg-blue-700 transition-all active:scale-95"
+             onClick={handleSavePDF}
+             className="flex items-center gap-2 px-6 py-3 bg-blue-600 text-white rounded-2xl font-bold shadow-lg shadow-blue-500/30 hover:bg-blue-700 transition-all active:scale-95"
           >
-            <span>💾</span>
-            Sauvegarder mon bilan
+            <span>📄</span>
+            Sauvegarder mon bilan (PDF)
           </button>
         </div>
       </footer>

@@ -23,29 +23,44 @@
             background: rgba(30, 41, 59, 0.7);
             border: 1px solid rgba(255, 255, 255, 0.1);
         }
-        input[type="range"]::-webkit-slider-thumb {
-            -webkit-appearance: none;
-            height: 20px;
-            width: 20px;
-            border-radius: 50%;
-            background: #2563eb;
-            cursor: pointer;
-            box-shadow: 0 0 2px 0 rgba(0,0,0,0.5);
+        
+        @media print {
+            .no-print, button, footer, header, .stepper, textarea::placeholder {
+                display: none !important;
+            }
+            body {
+                background: white !important;
+                color: black !important;
+            }
+            .lg\:col-span-7, .lg\:col-span-5 {
+                grid-column: span 12 / span 12 !important;
+            }
+            .sticky {
+                position: static !important;
+            }
+            .shadow-xl, .shadow-lg {
+                box-shadow: none !important;
+                border: 1px solid #eee !important;
+            }
         }
     </style>
-<script type="importmap">
+    <script type="importmap">
 {
   "imports": {
-    "@google/genai": "https://esm.sh/@google/genai@^1.35.0",
+    "react": "https://esm.sh/react@19.0.0",
+    "react-dom": "https://esm.sh/react-dom@19.0.0",
+    "react-dom/client": "https://esm.sh/react-dom@19.0.0/client",
+    "@google/genai": "https://esm.sh/@google/genai@0.2.1",
+    "recharts": "https://esm.sh/recharts@2.12.7",
+    "jspdf": "https://esm.sh/jspdf@2.5.1",
     "react-dom/": "https://esm.sh/react-dom@^19.2.3/",
-    "react/": "https://esm.sh/react@^19.2.3/",
-    "react": "https://esm.sh/react@^19.2.3",
-    "recharts": "https://esm.sh/recharts@^3.6.0"
+    "react/": "https://esm.sh/react@^19.2.3/"
   }
 }
 </script>
 </head>
 <body class="bg-slate-50 text-slate-900 transition-colors duration-300 dark:bg-slate-950 dark:text-slate-100">
     <div id="root"></div>
+    <script type="module" src="index.tsx"></script>
 </body>
 </html>
