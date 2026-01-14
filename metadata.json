@@ -1,0 +1,8 @@
+{
+  "name": "FAD Tech Skills Pro - V2",
+  "description": "Une version modernisée et boostée à l'IA de l'outil de positionnement des habiletés technologiques en FAD, intégrant React, Tailwind CSS et l'IA Gemini pour des recommandations personnalisées.",
+  "requestFramePermissions": [
+    "camera",
+    "microphone"
+  ]
+}
